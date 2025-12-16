@@ -45,6 +45,12 @@ class SimulatorLogic:
         """
         return random.uniform(1, 10)
 
+    def allocate_resource(self):
+        """
+        Allocates a resource for a certain transition
+        """
+        return random.choice(['user_1', 'user_2', 'user_3', 'user_4', 'user_5'])
+
 class SimulationEngine:
     def __init__(self, net, initial_marking, final_marking):
         self.logic = SimulatorLogic(net, initial_marking, final_marking)
@@ -90,7 +96,7 @@ class SimulationEngine:
             if t.label is not None:
                 trace['events'].append({
                     'concept:name': t.label,
-                    'org:resource': "System",
+                    'org:resource': self.logic.allocate_resource(),
                     'time:timestamp': current_time,
                     'lifecycle:transition': 'complete'
                 })
