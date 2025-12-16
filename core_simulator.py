@@ -8,6 +8,9 @@ class SimulatorLogic:
         self.net = net
         self.initial_marking = initial_marking
         self.final_marking = final_marking
+        self.resource_names = ['user_1', 'user_2', 'user_3', 'user_4', 'user_5']
+        # Tracks when each resource will be free. key: resource_name, value: datetime
+        self.resource_availability = {name: datetime.datetime.min for name in self.resource_names}
 
     def generate_arrivals(self) -> List[Dict[str, Any]]:
         """
@@ -45,11 +48,38 @@ class SimulatorLogic:
         """
         return random.uniform(1, 10)
 
-    def allocate_resource(self):
+    def get_resource_slot(self, ready_time: datetime.datetime, duration_minutes: float):
         """
-        Allocates a resource for a certain transition
+        Allocates the earliest available resource.
+        Returns (resource_name, start_time, end_time)
         """
-        return random.choice(['user_1', 'user_2', 'user_3', 'user_4', 'user_5'])
+        # Find the resource that is free earliest
+        best_resource = None
+        earliest_free_time = datetime.datetime.max
+        
+        # Determine actual start time for each resource if specific resource is chosen
+        for res in self.resource_names:
+            free_at = self.resource_availability[res]
+            # If resource is free before ready_time, they can start at ready_time.
+            # Otherwise they start when they become free.
+            start_at = max(ready_time, free_at)
+            
+            if start_at < earliest_free_time:
+                earliest_free_time = start_at
+                best_resource = res
+            elif start_at == earliest_free_time:
+                 # Tie-breaker: random or first found. Let's just keep first found or pick random?
+                 # Deterministic is usually better for debugging, so keeping first found.
+                 pass
+        
+        # Calculate end time
+        duration = datetime.timedelta(minutes=duration_minutes)
+        end_time = earliest_free_time + duration
+        
+        # Update availability
+        self.resource_availability[best_resource] = end_time
+        
+        return best_resource, earliest_free_time, end_time
 
 class SimulationEngine:
     def __init__(self, net, initial_marking, final_marking):
@@ -60,12 +90,21 @@ class SimulationEngine:
         # 1. Get the list of arriving instances from the generator
         arrivals = self.logic.generate_arrivals()
         
+        flat_log = []
         for app in arrivals: 
             # 2. Simulate the process for each arrival
             trace = self._simulate_single_trace(app)
             self.log.append(trace)
+            
+            # 3. Flatten for DataFrame compatibility
+            # Prefix case attributes with 'case:' to distinguish them
+            case_attrs = {f"case:{k}": v for k, v in trace['attributes'].items()}
+            
+            for event in trace['events']:
+                merged_event = {**event, **case_attrs}
+                flat_log.append(merged_event)
         
-        return self.log
+        return flat_log
 
     def _simulate_single_trace(self, app_data: Dict[str, Any]) -> Dict[str, Any]:
         trace = {
@@ -87,18 +126,29 @@ class SimulationEngine:
             
             t = self.logic.select_transition(enabled)
             
-            # Don't think we have this in our process model, but this is just done so hidden transitions do not have any process time
-            duration = self.logic.get_processing_time(t) if t.label else 0
-            current_time += datetime.timedelta(minutes=duration)
+            if t.label:
+                # Calculate duration and find resource slot
+                processing_time = self.logic.get_processing_time(t)
+                resource, start, end = self.logic.get_resource_slot(current_time, processing_time)
+                
+                # Advance time to when this specific step finishes
+                # Note: This updates 'current_time' for the *token* (processing instance)
+                # equal to the end of the activity.
+                current_time = end 
+                
+                trace['events'].append({
+                    'concept:name': t.label,
+                    'org:resource': resource,
+                    'time:timestamp': current_time, 
+                    # If you want start timestamp too, you could add 'time:start': start
+                    'lifecycle:transition': 'complete'
+                })
+            else:
+                # Hidden transition: immediate, no resource
+                pass
             
             current_marking = execute(t, self.logic.net, current_marking)
             
-            if t.label is not None:
-                trace['events'].append({
-                    'concept:name': t.label,
-                    'org:resource': self.logic.allocate_resource(),
-                    'time:timestamp': current_time,
-                    'lifecycle:transition': 'complete'
-                })
+            print(trace)
                 
         return trace
