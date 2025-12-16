@@ -2,6 +2,9 @@ import random
 import datetime
 from typing import List, Dict, Any
 from pm4py.objects.petri_net.semantics import enabled_transitions, execute
+import statistics
+import matplotlib.pyplot as plt
+from collections import Counter, defaultdict
 
 class SimulatorLogic:
     def __init__(self, net, initial_marking, final_marking):
@@ -102,3 +105,178 @@ class SimulationEngine:
                 })
                 
         return trace
+    
+ 
+class log_analyzer:
+    def __init__(self, log):
+        self.log = log
+        self.num_traces = len(self.log)
+
+    # 1. Trace Length Metrics
+    def get_trace_length_stats(self):
+        lengths = [len(trace['events']) for trace in self.log if trace['events']]
+        return {
+            "max": max(lengths) if lengths else 0,
+            "min": min(lengths) if lengths else 0,
+            "avg": statistics.mean(lengths) if lengths else 0
+        }
+
+    # 2. Total Time Metrics (Trace Duration)
+    def get_total_time_stats(self):
+        durations = []
+        for trace in self.log:
+            if len(trace['events']) > 1:
+                start = trace['events'][0]['time:timestamp']
+                end = trace['events'][-1]['time:timestamp']
+                duration_sec = (end - start).total_seconds()
+                durations.append(duration_sec / 60)  # minutes
+
+        return {
+            "max": max(durations) if durations else 0,
+            "min": min(durations) if durations else 0,
+            "avg": statistics.mean(durations) if durations else 0
+        }
+
+    # 3. Activity Frequency Metrics (Normalized per Trace)
+    def get_activity_frequency_metrics(self):
+        total_counts = Counter()
+        presence_counts = Counter()
+
+        for trace in self.log:
+            activities_in_trace = set()
+
+            for event in trace['events']:
+                act = event['concept:name']
+                total_counts[act] += 1
+                activities_in_trace.add(act)
+
+            for act in activities_in_trace:
+                presence_counts[act] += 1
+
+        return {
+            act: {
+                "presence_per_trace": presence_counts[act] / self.num_traces,
+                "avg_occurrences_per_trace": total_counts[act] / self.num_traces
+            }
+            for act in total_counts
+        }
+
+    # 4. Activity Duration Metrics
+    def get_activity_duration_stats(self):
+        act_durations = defaultdict(list)
+
+        for trace in self.log:
+            for i in range(1, len(trace['events'])):
+                act_name = trace['events'][i]['concept:name']
+                prev_time = trace['events'][i - 1]['time:timestamp']
+                curr_time = trace['events'][i]['time:timestamp']
+
+                diff = (curr_time - prev_time).total_seconds() / 60
+                act_durations[act_name].append(diff)
+
+        return {
+            act: {
+                "max": max(times),
+                "min": min(times),
+                "avg": statistics.mean(times)
+            }
+            for act, times in act_durations.items()
+        }
+
+    # 5. Arrival Interval Metrics
+    def get_arrival_stats(self):
+        arrivals = [
+            trace['events'][0]['time:timestamp']
+            for trace in self.log
+            if trace['events']
+        ]
+
+        intervals = []
+        for i in range(1, len(arrivals)):
+            diff = (arrivals[i] - arrivals[i - 1]).total_seconds() / 60
+            intervals.append(diff)
+
+        return {
+            "max": max(intervals) if intervals else 0,
+            "min": min(intervals) if intervals else 0,
+            "avg": statistics.mean(intervals) if intervals else 0
+        }
+
+    # 6. Resource Frequency Metrics (Normalized per Trace)
+    def get_resource_frequency_metrics(self):
+        total_counts = Counter()
+        presence_counts = Counter()
+
+        for trace in self.log:
+            resources_in_trace = set()
+
+            for event in trace['events']:
+                res = event['org:resource']
+                total_counts[res] += 1
+                resources_in_trace.add(res)
+
+            for res in resources_in_trace:
+                presence_counts[res] += 1
+
+        return {
+            res: {
+                "presence_per_trace": presence_counts[res] / self.num_traces,
+                "avg_occurrences_per_trace": total_counts[res] / self.num_traces
+            }
+            for res in total_counts
+        }
+
+    # --- Main Analysis Method ---
+    def print_analysis(self):
+        print("=== PROCESS SIMULATION ANALYSIS ===")
+
+        len_stats = self.get_trace_length_stats()
+        print(
+            f"\nTrace Length | "
+            f"Max: {len_stats['max']} | "
+            f"Min: {len_stats['min']} | "
+            f"Avg: {len_stats['avg']:.2f}"
+        )
+
+        time_stats = self.get_total_time_stats()
+        print(
+            f"Total Time (min) | "
+            f"Max: {time_stats['max']:.2f} | "
+            f"Min: {time_stats['min']:.2f} | "
+            f"Avg: {time_stats['avg']:.2f}"
+        )
+
+        arr_stats = self.get_arrival_stats()
+        print(
+            f"Inter-Arrival (min) | "
+            f"Max: {arr_stats['max']:.2f} | "
+            f"Min: {arr_stats['min']:.2f} | "
+            f"Avg: {arr_stats['avg']:.2f}"
+        )
+
+        print("\nActivity Performance (min):")
+        act_stats = self.get_activity_duration_stats()
+        for act, s in act_stats.items():
+            print(
+                f" - {act:25} | "
+                f"Avg: {s['avg']:6.2f} | "
+                f"Max: {s['max']:6.2f}"
+            )
+
+        print("\nActivity Frequency (per trace):")
+        act_freq = self.get_activity_frequency_metrics()
+        for act, s in act_freq.items():
+            print(
+                f" - {act:25} | "
+                f"Presence: {s['presence_per_trace']:.2f} | "
+                f"Avg Occurrences: {s['avg_occurrences_per_trace']:.2f}"
+            )
+
+        print("\nResource Frequency (per trace):")
+        res_freq = self.get_resource_frequency_metrics()
+        for res, s in res_freq.items():
+            print(
+                f" - {res:25} | "
+                f"Presence: {s['presence_per_trace']:.2f} | "
+                f"Avg Occurrences: {s['avg_occurrences_per_trace']:.2f}"
+            )
