@@ -8,11 +8,34 @@ schedule_dict = {(0, 0): 8.500303582270796e-05, (0, 1): 5.843958712811172e-05, (
 
 
 class SimulatorLogic:
-    def __init__(self, net, initial_marking, final_marking, schedule_dict):
+    def __init__(self, net, initial_marking, final_marking):
         self.net = net
         self.initial_marking = initial_marking
         self.final_marking = final_marking
         self.schedule_dict = schedule_dict
+        self.holidays = {
+            datetime.date(2016, 1, 1), 
+            datetime.date(2016, 3, 28), # Easter Monday
+            datetime.date(2016, 4, 27), # King's Day
+            datetime.date(2016, 5, 5), # Ascension Day
+            datetime.date(2016, 5, 16), # Whit Monday
+            datetime.date(2016, 12, 25),
+            datetime.date(2016, 12, 26)
+        }
+        self.monthly_multipliers = {
+            1: 1.00,
+            2: 1.10,
+            3: 1.12,
+            4: 0.99,
+            5: 0.94,
+            6: 1.37,
+            7: 1.39,
+            8: 1.41,
+            9: 1.39,
+            10: 1.37,
+            11: 1.22,
+            12: 1.08,
+        }
         
         # Load availability from JSON
         self.availability_probs = self.load_availability_from_json() 
@@ -38,18 +61,21 @@ class SimulatorLogic:
         # Default to a tiny number (not 0) to avoid math errors if data is missing
         return self.schedule_dict.get((day_idx, hour_idx), 0.000001)
     
+    def _get_monthly_multiplier(self, current_time: datetime.datetime) -> float:
+        # Returns the specific multiplier for the current month.
+        current_month = current_time.month
+        return self.monthly_multipliers.get(current_month, 1.0)
+    
     def generate_arrivals(self) -> List[Dict[str, Any]]:
         """
         Creates a list of arriving instances.
         """
         arrivals = []
         
-        # Setup the clock
-        # only one month for now    
+        # Setup the clock (Running for 1 Year)
         start_date = datetime.datetime(2016, 1, 1)
-        duration_days = 31
+        end_time = start_date + datetime.timedelta(days=365)
         current_time = start_date
-        end_time = start_date + datetime.timedelta(days=duration_days)
         
         instance_counter = 0
 
@@ -58,25 +84,45 @@ class SimulatorLogic:
             # rate for this specific time
             current_lambda = self._get_arrival_rate(current_time)
             
-            # calculate Wait Time
-            # formula: -ln(U) / lambda
-            wait_seconds = random.expovariate(current_lambda)
+            # --- STEP 2: Apply Holiday Filter ---
+            is_holiday = current_time.date() in self.holidays
             
-            # setting the new time
+            if is_holiday:
+                current_lambda = 0.000001 
+            else:
+                # --- STEP 3: Apply Monthly Multiplier ---
+                multiplier = self._get_monthly_multiplier(current_time)
+                current_lambda = current_lambda * multiplier
+
+            # --- STEP 4: Math ---
+            if current_lambda <= 0.000001:
+                wait_seconds = 3600
+            else:
+                wait_seconds = random.expovariate(current_lambda)
+            
+            # Advance Time
             current_time += datetime.timedelta(seconds=wait_seconds)
             
-            # create the Instance
+            # If it's a holiday, we DO NOT spawn. We just loop again.
+            if current_time.date() in self.holidays:
+                continue # Skip the append, go back to top of loop
+            
+            # Create Instance
             if current_time < end_time:
                 instance_counter += 1
                 
-                # OPTIONAL: Randomize attributes here too (instead of hardcoding)
+                monthly_mult = self._get_monthly_multiplier(current_time)
+                season_label = "High Season" if monthly_mult > 1.2 else "Normal"
+
                 instance_data = {
                     'instance_id': f"Application_{instance_counter}",
                     'arrival_time': current_time,
                     'attributes': {
                         'LoanGoal': random.choice(['Existing loan takeover', 'Home improvement', 'Car']),
                         'ApplicationType': 'New credit',
-                        'RequestedAmount': round(random.uniform(5000, 50000), 2)
+                        'RequestedAmount': round(random.uniform(5000, 50000), 2),
+                        'SeasonalityFactor': monthly_mult, 
+                        'SeasonLabel': season_label
                     }
                 }
                 arrivals.append(instance_data)
