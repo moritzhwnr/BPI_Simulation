@@ -225,7 +225,7 @@ class SimulatorLogic:
 
 class SimulationEngine:  
     def __init__(self, net, initial_marking, final_marking):
-        self.logic = SimulatorLogic(net, initial_marking, final_marking, schedule_dict)
+        self.logic = SimulatorLogic(net, initial_marking, final_marking)
         self.log = []
 
     def run_simulation(self):
