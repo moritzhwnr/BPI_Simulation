@@ -164,7 +164,7 @@ def load_model(checkpoint_path, device='cpu'):
         raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
         
     print(f"Loading checkpoint: {checkpoint_path}")
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     
     # Retrieve Metadata
     vocab_size = checkpoint.get('vocab_size', 20) # Default fallback
