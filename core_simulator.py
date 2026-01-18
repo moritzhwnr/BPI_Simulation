@@ -208,7 +208,7 @@ class SimulatorLogic:
         
         return self.org_model['permission_map'].get(activity, self.resource_names)
 
-    def _load_availability_from_json(self, filename="resource_availability.json"):
+    def _load_availability_from_json(self, filename="resource_allocation/resource_availability.json"):
         with open(filename, 'r') as f:
             data = json.load(f)
         
@@ -220,7 +220,7 @@ class SimulatorLogic:
             reconstructed[(parts[0], int(parts[1]), int(parts[2]))] = v
         return reconstructed
     
-    def _load_organizational_model(self, filename="organizational_model.pkl"):
+    def _load_organizational_model(self, filename="resource_permissions/organizational_model.pkl"):
         """Load the OrdinoR organizational model with permissions."""
         try:
             with open(filename, 'rb') as f:
