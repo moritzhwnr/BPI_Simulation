@@ -1,8 +1,15 @@
 import random
 import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 from pm4py.objects.petri_net.semantics import enabled_transitions, execute
 import json
+import os
+import sys
+
+# Add predictive model to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'predictive_modeling_processing_time'))
+
+from inference import load_model, preprocess_single_trace, predict_duration
 
 schedule_dict = {(0, 0): 8.500303582270796e-05, (0, 1): 5.843958712811172e-05, (0, 2): 3.187613843351548e-05, (0, 3): 4.250151791135398e-05, (0, 4): 4.7814207650273224e-05, (0, 5): 0.00017000607164541592, (0, 6): 0.0004834547662416515, (0, 7): 0.0017585003035822707, (0, 8): 0.003097298117789921, (0, 9): 0.0028316636308439586, (0, 10): 0.0027625986642380086, (0, 11): 0.002666970248937462, (0, 12): 0.0026510321797207042, (0, 13): 0.0025075895567698847, (0, 14): 0.0024597753491196112, (0, 15): 0.002013509411050395, (0, 16): 0.001933819064966606, (0, 17): 0.0020772616879174257, (0, 18): 0.002125075895567699, (0, 19): 0.0017691256830601092, (0, 20): 0.0012591074681238617, (0, 21): 0.0007756527018822102, (0, 22): 0.0003506375227686703, (0, 23): 0.0001593806921675774, (1, 0): 0.0001009411050394657, (1, 1): 5.312689738919247e-05, (1, 2): 4.7814207650273224e-05, (1, 3): 3.7188828172434734e-05, (1, 4): 6.375227686703097e-05, (1, 5): 0.0001912568306010929, (1, 6): 0.0005631451123254402, (1, 7): 0.0012591074681238617, (1, 8): 0.001933819064966606, (1, 9): 0.002087887067395264, (1, 10): 0.0019178809957498483, (1, 11): 0.0019019429265330905, (1, 12): 0.002061323618700668, (1, 13): 0.001992258652094718, (1, 14): 0.0021782027929568913, (1, 15): 0.001955069823922283, (1, 16): 0.0015778688524590164, (1, 17): 0.0017585003035822707, (1, 18): 0.0021622647237401335, (1, 19): 0.0018966302367941714, (1, 20): 0.0012644201578627808, (1, 21): 0.0007650273224043716, (1, 22): 0.00034532483302975107, (1, 23): 0.00022844565877352764, (2, 0): 6.906496660595022e-05, (2, 1): 5.843958712811172e-05, (2, 2): 4.7814207650273224e-05, (2, 3): 3.7188828172434734e-05, (2, 4): 8.500303582270796e-05, (2, 5): 0.00022313296903460838, (2, 6): 0.00037720097146326655, (2, 7): 0.0012591074681238617, (2, 8): 0.0018010018214936249, (2, 9): 0.0021675774134790526, (2, 10): 0.0021622647237401335, (2, 11): 0.002061323618700668, (2, 12): 0.0021410139647844565, (2, 13): 0.00225789313904068, (2, 14): 0.0022313296903460835, (2, 15): 0.001997571341833637, (2, 16): 0.001572556162720097, (2, 17): 0.0013706739526411658, (2, 18): 0.001870066788099575, (2, 19): 0.001700060716454159, (2, 20): 0.0011634790528233152, (2, 21): 0.0006906496660595021, (2, 22): 0.0004037644201578628, (2, 23): 0.0001912568306010929, (3, 0): 6.906496660595022e-05, (3, 1): 3.187613843351548e-05, (3, 2): 3.187613843351548e-05, (3, 3): 6.375227686703097e-05, (3, 4): 0.0001009411050394657, (3, 5): 0.00018063145112325442, (3, 6): 0.0003878263509411051, (3, 7): 0.001354735883424408, (3, 8): 0.0018647540983606557, (3, 9): 0.001992258652094718, (3, 10): 0.0021357012750455374, (3, 11): 0.0020985124468731026, (3, 12): 0.0019072556162720098, (3, 13): 0.0018010018214936249, (3, 14): 0.0020931997571341835, (3, 15): 0.0015034911961141469, (3, 16): 0.0013706739526411658, (3, 17): 0.0014928658166363084, (3, 18): 0.0018488160291438979, (3, 19): 0.001460989678202793, (3, 20): 0.0011103521554341226, (3, 21): 0.0007544019429265331, (3, 22): 0.00037720097146326655, (3, 23): 0.00011156648451730419, (4, 0): 9.031572556162721e-05, (4, 1): 5.843958712811172e-05, (4, 2): 3.187613843351548e-05, (4, 3): 4.7814207650273224e-05, (4, 4): 6.906496660595022e-05, (4, 5): 0.00018594414086217363, (4, 6): 0.00036126290224650884, (4, 7): 0.0012803582270795387, (4, 8): 0.001891317547055252, (4, 9): 0.0021410139647844565, (4, 10): 0.0021569520340012143, (4, 11): 0.00197632058287796, (4, 12): 0.0019656952034001218, (4, 13): 0.002172890103217972, (4, 14): 0.0020560109289617487, (4, 15): 0.0016416211293260475, (4, 16): 0.0011581663630843959, (4, 17): 0.001120977534911961, (4, 18): 0.0010837887067395263, (4, 19): 0.0009244080145719489, (4, 20): 0.0006906496660595021, (4, 21): 0.00046751669702489376, (4, 22): 0.00030282331511839706, (4, 23): 0.00011156648451730419, (5, 0): 0.0001009411050394657, (5, 1): 3.187613843351548e-05, (5, 2): 2.6563448694596234e-05, (5, 3): 3.187613843351548e-05, (5, 4): 2.6563448694596234e-05, (5, 5): 6.375227686703097e-05, (5, 6): 0.00025500910746812386, (5, 7): 0.00035595021250758955, (5, 8): 0.001030661809350334, (5, 9): 0.0014291135397692775, (5, 10): 0.0014238008500303582, (5, 11): 0.0012803582270795387, (5, 12): 0.0014663023679417123, (5, 13): 0.0011900425015179115, (5, 14): 0.001333485124468731, (5, 15): 0.000945658773527626, (5, 16): 0.0007225258044930177, (5, 17): 0.0005790831815421979, (5, 18): 0.0007650273224043716, (5, 19): 0.0006481481481481482, (5, 20): 0.00046220400728597447, (5, 21): 0.00035595021250758955, (5, 22): 0.0002656344869459624, (5, 23): 0.00015406800242865818, (6, 0): 8.500303582270796e-05, (6, 1): 6.375227686703097e-05, (6, 2): 2.6563448694596234e-05, (6, 3): 3.7188828172434734e-05, (6, 4): 3.187613843351548e-05, (6, 5): 0.00011687917425622344, (6, 6): 0.0002018822100789314, (6, 7): 0.00043032786885245904, (6, 8): 0.0005418943533697632, (6, 9): 0.0008234669095324833, (6, 10): 0.0007756527018822102, (6, 11): 0.0008606557377049181, (6, 12): 0.0006322100789313904, (6, 13): 0.0007012750455373406, (6, 14): 0.0008181542197935641, (6, 15): 0.0006906496660595021, (6, 16): 0.0006322100789313904, (6, 17): 0.0006693989071038252, (6, 18): 0.0009244080145719489, (6, 19): 0.001009411050394657, (6, 20): 0.0009031572556162721, (6, 21): 0.0005578324225865209, (6, 22): 0.00028688524590163934, (6, 23): 9.562841530054645e-05}
 
@@ -14,7 +21,7 @@ class SimulatorLogic:
         self.final_marking = final_marking
         self.schedule_dict = schedule_dict
         self.holidays = {
-            datetime.date(2016, 1, 1), 
+            datetime.date(2016, 1, 1),
             datetime.date(2016, 3, 28), # Easter Monday
             datetime.date(2016, 4, 27), # King's Day
             datetime.date(2016, 5, 5), # Ascension Day
@@ -36,18 +43,41 @@ class SimulatorLogic:
             11: 1.22,
             12: 1.08,
         }
-        
+
         # Load availability from JSON
-        self.availability_probs = self.load_availability_from_json() 
+        self.availability_probs = self.load_availability_from_json()
 
         # Dynamically set resource names from the loaded availability data
         if self.availability_probs:
             self.resource_names = sorted(list(set(k[0] for k in self.availability_probs.keys())))
         else:
             self.resource_names = ['User_1', 'User_2', 'User_3', 'User_4', 'User_5']
-            
+
         # Tracks when each resource will be free. key: resource_name, value: datetime
         self.resource_availability = {name: datetime.datetime.min for name in self.resource_names}
+
+        # Load the execution time prediction model
+        self._load_execution_model()
+
+    def _load_execution_model(self):
+        """Load the DKL model for predicting execution times."""
+        checkpoint_path = os.path.join(
+            os.path.dirname(__file__),
+            'predictive_modeling_processing_time',
+            'checkpoints',
+            'dkl_best_model.pth'
+        )
+        try:
+            self.model, self.likelihood, self.scaler_mean, self.scaler_scale = load_model(checkpoint_path)
+            self.use_ml_model = True
+            print("Execution time prediction model loaded successfully.")
+        except FileNotFoundError:
+            print(f"Warning: Model checkpoint not found at {checkpoint_path}. Using random processing times.")
+            self.use_ml_model = False
+            self.model = None
+            self.likelihood = None
+            self.scaler_mean = None
+            self.scaler_scale = None
 
     def _get_arrival_rate(self, current_time: datetime.datetime) -> float:
         """
@@ -139,11 +169,81 @@ class SimulatorLogic:
         return random.choice(enabled_trans) #Is currently chosen randomly 
     #Ich glaube es könnte auch Sinn ergeben, hier vielleicht alle bisherigen transitions zu übergeben, um eine gute prediction zu haben.
 
-    def get_processing_time(self, transition):
+    def get_processing_time(self, transition, trace: Optional[Dict] = None, current_time: Optional[datetime.datetime] = None) -> float:
         """
-        Returns minutes for a certain event in minutes
+        Returns processing time in minutes for a certain event.
+
+        Uses ML model if available and trace history exists, otherwise falls back to random.
+
+        Args:
+            transition: The Petri net transition being executed
+            trace: Current trace with 'attributes' and 'events' (for ML prediction)
+            current_time: Current simulation time (for ML prediction)
+
+        Returns:
+            Processing time in minutes
         """
-        return random.uniform(1, 10)
+        # Fallback to random if model not available or no trace context
+        if not self.use_ml_model or trace is None or current_time is None:
+            return random.uniform(1, 10)
+
+        # Need at least one past event to make a prediction
+        if len(trace['events']) == 0:
+            return random.uniform(1, 10)
+
+        try:
+            # Build the input trace format expected by the model
+            model_trace = self._build_model_trace(trace, current_time)
+
+            # Preprocess and predict
+            input_tensor = preprocess_single_trace(model_trace, self.scaler_mean, self.scaler_scale)
+            duration_seconds, _, _ = predict_duration(self.model, self.likelihood, input_tensor, self.scaler_mean, self.scaler_scale)
+
+            # Convert seconds to minutes and ensure reasonable bounds
+            duration_minutes = duration_seconds / 60.0
+
+            # Clamp to reasonable range (0.1 minutes to 1440 minutes = 24 hours)
+            duration_minutes = max(0.1, min(duration_minutes, 1440))
+
+            return duration_minutes
+
+        except Exception as e:
+            # If prediction fails, fall back to random
+            print(f"Warning: ML prediction failed ({e}), using random processing time.")
+            return random.uniform(1, 10)
+
+    def _build_model_trace(self, trace: Dict, current_time: datetime.datetime) -> Dict:
+        """
+        Builds the trace format expected by the inference model.
+
+        Args:
+            trace: Simulation trace with events
+            current_time: Current simulation time
+
+        Returns:
+            Dict in format expected by preprocess_single_trace
+        """
+        model_events = []
+        for event in trace['events']:
+            # Convert datetime to ISO format string
+            timestamp = event['time:timestamp']
+            if isinstance(timestamp, datetime.datetime):
+                timestamp_str = timestamp.isoformat()
+            else:
+                timestamp_str = str(timestamp)
+
+            model_events.append({
+                'concept:name': event['concept:name'],
+                'time:timestamp': timestamp_str,
+                'org:resource': event['org:resource']
+            })
+
+        return {
+            'attributes': {
+                'RequestedAmount': trace['attributes'].get('RequestedAmount', 10000.0)
+            },
+            'events': model_events
+        }
 
     def load_availability_from_json(self, filename="resource_availability.json"):
         with open(filename, 'r') as f:
@@ -261,8 +361,8 @@ class SimulationEngine:
             t = self.logic.select_transition(enabled)
             
             if t.label:
-                # Calculate duration and find resource slot
-                processing_time = self.logic.get_processing_time(t)
+                # Calculate duration using ML model (with trace context) and find resource slot
+                processing_time = self.logic.get_processing_time(t, trace=trace, current_time=current_time)
                 resource, start, end = self.logic.get_resource_slot_advanced(current_time, processing_time)
                 
                 # Advance time to when this specific step finishes
