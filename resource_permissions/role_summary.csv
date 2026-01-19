@@ -1,0 +1,6 @@
+cluster_id,role_name,num_resources,num_capabilities,resources_sample
+1,Core Process Handler,142,18,"User_59, User_95, User_17, User_123, User_81..."
+2,Completion Specialist,15,8,"User_106, User_11, User_18, User_2, User_28..."
+3,Submission Handler,1,18,User_1
+4,Support & Communication Specialist,122,18,"User_95, User_123, User_17, User_148, User_90..."
+5,Collections Specialist,7,3,"User_24, User_5, User_50, User_69, User_99..."
