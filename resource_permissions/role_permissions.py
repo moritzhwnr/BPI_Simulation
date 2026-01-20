@@ -6,6 +6,9 @@ import numpy as np
 from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
 from collections import Counter, defaultdict
+import matplotlib.pyplot as plt
+
+import seaborn as sns
 import pickle
 import json
 import os
@@ -256,7 +259,7 @@ def save_output(permission_map, activity_clusters, resource_groups, role_names, 
     with open('organizational_model.pkl', 'wb') as f:
         pickle.dump(export_data, f)
     
-    print("✅ Saved organizational_model.pkl")
+    print("Saved organizational_model.pkl")
         
     # 2. JSON Export (convert all numpy types to native Python)
     
@@ -317,7 +320,7 @@ def save_output(permission_map, activity_clusters, resource_groups, role_names, 
     with open('organizational_model.json', 'w') as f:
         json.dump(cleaned_export, f, indent=2)
         
-    print("✅ Saved organizational_model.json")
+    print("Saved organizational_model.json")
     
     # 3. BONUS: Export context permissions as CSV for easy inspection
     context_df_data = []
@@ -333,7 +336,7 @@ def save_output(permission_map, activity_clusters, resource_groups, role_names, 
     if context_df_data:
         context_df = pd.DataFrame(context_df_data)
         context_df.to_csv('context_permissions.csv', index=False)
-        print(f"✅ Saved context_permissions.csv ({len(context_df)} contexts)")
+        print(f"Saved context_permissions.csv ({len(context_df)} contexts)")
     
     # 4. BONUS: Export role summary
     role_summary = []
@@ -349,13 +352,85 @@ def save_output(permission_map, activity_clusters, resource_groups, role_names, 
     
     role_summary_df = pd.DataFrame(role_summary)
     role_summary_df.to_csv('role_summary.csv', index=False)
-    print(f"✅ Saved role_summary.csv")
+    print(f"Saved role_summary.csv")
     
-    print("\n📦 Export Summary:")
+    print("\nExport Summary:")
     print(f"   Simple permissions: {len(permission_map)} activities")
     print(f"   Context permissions: {len(context_permission_map)} contexts")
     print(f"   Resource groups: {len(resource_groups)} clusters")
     print(f"   Total resources: {len(organizational_model['mem'])} resources")
+
+import matplotlib.pyplot as plt
+from scipy.cluster.hierarchy import dendrogram
+
+def plot_colored_dendrogram(Z, activity_clusters, activity_names):
+    plt.figure(figsize=(15, 8))
+    plt.title("Organizational Roles: Activity Clusters by Social Distance", fontsize=16)
+    
+    # Calculate threshold dynamically to match the number of clusters found
+    # We want a threshold that cuts the dendrogram into the same number of clusters as 'activity_clusters'
+    num_clusters = activity_clusters.nunique()
+    
+    if num_clusters > 1 and len(Z) >= num_clusters:
+        # The merge at index -(k-1) creates k-1 clusters. We want to be below this distance.
+        upper_bound = Z[-(num_clusters - 1), 2]
+        # The merge at index -k creates k clusters. We want to be above this distance to color them.
+        lower_bound = Z[-num_clusters, 2]
+        
+        # Use midpoint between the boundaries
+        threshold = (upper_bound + lower_bound) / 2.0
+    else:
+        # Fallback
+        threshold = 0.5 * max(Z[:, 2]) if len(Z) > 0 else 0 
+    
+    # Generate the dendrogram
+    dend_data = dendrogram(
+        Z,
+        labels=activity_names,
+        leaf_rotation=90,
+        leaf_font_size=11,
+        color_threshold=threshold,  # This applies the colors based on your clusters
+        above_threshold_color='grey'
+    )
+    
+    plt.axhline(y=threshold, color='r', linestyle='--', label=f'Role Boundary (Threshold {threshold})')
+    plt.ylabel("Distance (1 - Pearson Correlation)", fontsize=12)
+    plt.xlabel("Activities (Grouped by Resource Footprint)", fontsize=12)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('colored_activity_dendrogram.png', dpi=300)
+    plt.show()
+
+def plot_capability_heatmap(capabilities, role_names):
+    # Flatten the capabilities dictionary into a list for DataFrame conversion
+    heatmap_rows = []
+    for rg_id, caps in capabilities.items():
+        # Map the numeric cluster ID to your human-readable role names
+        role_label = role_names.get(rg_id, f"Role {rg_id}")
+        for cap in caps:
+            heatmap_rows.append({
+                'Role': role_label,
+                'Context': f"{cap['case_type']} | {cap['time_type']}",
+                'Score': cap['overall_score']
+            })
+    
+    df_heat = pd.DataFrame(heatmap_rows)
+    
+    # Pivot the data: Roles on the Y-axis, Context (Case+Time) on the X-axis
+    pivot_heat = df_heat.pivot(index='Role', columns='Context', values='Score')
+
+    plt.figure(figsize=(16, 9))
+    sns.heatmap(pivot_heat, annot=True, fmt=".2f", cmap="YlGnBu", 
+                cbar_kws={'label': 'Capability Score ($\lambda$)'})
+    
+    plt.title("Role-Context Capability Map (Organizational Maturity)", fontsize=16)
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel("Discovered Organizational Roles", fontsize=12)
+    plt.xlabel("Execution Context (Complexity | Time of Day)", fontsize=12)
+    plt.tight_layout()
+    plt.savefig('capability_heatmap.png', dpi=300)
+    plt.show()
+
 
 def main():
     file_path = DEFAULT_XES_PATH
