@@ -108,16 +108,38 @@ def assign_resources_to_clusters(activity_clusters, resource_allocation_df, df):
 def define_execution_contexts(df, activity_clusters, resource_groups):
     """Enriches DataFrame with context information (case_type, activity_type, time_type)."""
     print("Defining execution contexts...")
-    
-    # helper for case type
-    case_case = df.groupby('case:concept:name')['concept:name'].count()
-    def get_case_type(n_events):
-        if n_events < 10: return 'Simple'
-        elif n_events < 20: return 'Standard'
-        elif n_events < 30: return 'Complex'
-        return 'Very Complex'
-    
-    case_types = case_case.map(get_case_type)
+
+    # ALIGNED WITH SIMULATOR: Use RequestedAmount for case_type
+    # This ensures permissions built here match simulator lookups
+    def get_case_type_by_amount(requested_amount):
+        """Same logic as core_simulator._determine_case_type()"""
+        if requested_amount < 10000:
+            return 'Simple'
+        elif requested_amount < 25000:
+            return 'Standard'
+        elif requested_amount < 40000:
+            return 'Complex'
+        else:
+            return 'Very Complex'
+
+    # Get RequestedAmount per case (it's a case-level attribute)
+    if 'case:RequestedAmount' in df.columns:
+        case_amounts = df.groupby('case:concept:name')['case:RequestedAmount'].first()
+        case_types = case_amounts.map(get_case_type_by_amount)
+    elif 'RequestedAmount' in df.columns:
+        case_amounts = df.groupby('case:concept:name')['RequestedAmount'].first()
+        case_types = case_amounts.map(get_case_type_by_amount)
+    else:
+        # Fallback: use event count if no amount available
+        print("WARNING: No RequestedAmount found, falling back to event count")
+        case_case = df.groupby('case:concept:name')['concept:name'].count()
+        def get_case_type_by_events(n_events):
+            if n_events < 10: return 'Simple'
+            elif n_events < 20: return 'Standard'
+            elif n_events < 30: return 'Complex'
+            return 'Very Complex'
+        case_types = case_case.map(get_case_type_by_events)
+
     df['case_type'] = df['case:concept:name'].map(case_types)
     
     # activity type
